@@ -115,39 +115,68 @@ if uploaded_file is not None:
     # FORECAST FUNCTION
     # ──────────────────────────────────────────────
     def train_forecast(series, look_back, forecast_horizon=3):
-        scaled, min_val, max_val = min_max_scale(series)
-        X, y = create_sequences(scaled, look_back)
-        
-        coeffs = []
-        for i in range(len(X)):
-            Xi = np.vstack([X[i], np.ones(look_back)]).T
-            yi = y[i]
-            w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
-            coeffs.append(w)
-        
-        # Progress bar
-        progress_text = "Forecasting..."
-        my_bar = st.progress(0, text=progress_text)
+    scaled, min_val, max_val = min_max_scale(series)
+    X, y = create_sequences(scaled, look_back)
 
-        last_seq = scaled[-look_back:]
-        future_scaled = []
-        for i in range(forecast_horizon):
-            time.sleep(0.05)
-            Xi = np.vstack([last_seq, np.ones(look_back)]).T
-            avg_w = np.mean(coeffs, axis=0)
-            next_pred = Xi @ avg_w
-            next_val = next_pred.mean()
-            future_scaled.append(next_val)
-            last_seq = np.append(last_seq[1:], next_val)
-            my_bar.progress((i+1)/forecast_horizon, text=progress_text)
+    if len(X) == 0:
+        return np.nan, np.nan, np.nan, np.array([])
 
-        my_bar.empty()
-        future_vals = inverse_scale(np.array(future_scaled), min_val, max_val)
+    coeffs = []
+    y_preds_train = []
 
-        # Metrics are set to NaN to avoid dimension mismatch
-        rmse_val = mae_val = mape_val = np.nan
+    # ─────────────────────────────
+    # Train + compute training predictions
+    # ─────────────────────────────
+    for i in range(len(X)):
+        Xi = np.vstack([X[i], np.ones(look_back)]).T
+        yi = y[i]
 
-        return rmse_val, mae_val, mape_val, future_vals
+        w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
+        coeffs.append(w)
+
+        # Predict this training point
+        pred = (Xi @ w).mean()
+        y_preds_train.append(pred)
+
+    y_preds_train = np.array(y_preds_train)
+
+    # ─────────────────────────────
+    # Compute proper metrics
+    # ─────────────────────────────
+    y_true = inverse_scale(y, min_val, max_val)
+    y_pred = inverse_scale(y_preds_train, min_val, max_val)
+
+    rmse_val = np.sqrt(np.mean((y_true - y_pred) ** 2))
+    mae_val = np.mean(np.abs(y_true - y_pred))
+    mape_val = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+    # ─────────────────────────────
+    # Forecast future values
+    # ─────────────────────────────
+    progress_text = "Forecasting..."
+    my_bar = st.progress(0, text=progress_text)
+
+    last_seq = scaled[-look_back:]
+    future_scaled = []
+
+    avg_w = np.mean(coeffs, axis=0)
+
+    for i in range(forecast_horizon):
+        time.sleep(0.05)
+
+        Xi = np.vstack([last_seq, np.ones(look_back)]).T
+        next_pred = (Xi @ avg_w).mean()
+
+        future_scaled.append(next_pred)
+        last_seq = np.append(last_seq[1:], next_pred)
+
+        my_bar.progress((i + 1) / forecast_horizon, text=progress_text)
+
+    my_bar.empty()
+
+    future_vals = inverse_scale(np.array(future_scaled), min_val, max_val)
+
+    return rmse_val, mae_val, mape_val, future_vals
 
     # ──────────────────────────────────────────────
     # LOOK-BACK WINDOW ILLUSTRATION
