@@ -1,5 +1,5 @@
 """
-Kenya Agricultural Forecast Dashboard (Pure NumPy Version)
+Kenya Agricultural Forecast Dashboard (NumPy Version with Progress Bar)
 1960–2020 Data → 3-Year Forecast (2021–2023)
 Omari Galana Shevo – MUST
 """
@@ -8,6 +8,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
+import time
 
 # ──────────────────────────────────────────────
 # PAGE CONFIG
@@ -37,29 +38,19 @@ if uploaded_file is not None:
         st.error(f"Error reading file: {e}")
         st.stop()
 
-    # Filter production data
     df = df[df["Element"] == "Production"]
     df = df[df["Year"].between(1960, 2020)]
     df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
     df = df.dropna(subset=["Value"])
 
-    # ──────────────────────────────────────────────
-    # SIDEBAR
-    # ──────────────────────────────────────────────
     crop_list = sorted(df["Item"].unique())
     crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
     look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
 
-    # ──────────────────────────────────────────────
-    # PREPARE SERIES
-    # ──────────────────────────────────────────────
     series_df = df[df["Item"] == crop_selected].sort_values("Year")
     values = series_df["Value"].values
     years = series_df["Year"].values
 
-    # ──────────────────────────────────────────────
-    # SCALING & METRICS
-    # ──────────────────────────────────────────────
     def min_max_scale(array):
         min_val = array.min()
         max_val = array.max()
@@ -78,9 +69,6 @@ if uploaded_file is not None:
     def mape(y_true, y_pred):
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-    # ──────────────────────────────────────────────
-    # SEQUENCE DATA
-    # ──────────────────────────────────────────────
     def create_sequences(series, look_back):
         X, y = [], []
         for i in range(len(series) - look_back):
@@ -88,14 +76,10 @@ if uploaded_file is not None:
             y.append(series[i+look_back])
         return np.array(X), np.array(y)
 
-    # ──────────────────────────────────────────────
-    # ROLLING LINEAR FORECAST
-    # ──────────────────────────────────────────────
     def train_forecast(series, look_back, forecast_horizon=3):
         scaled, min_val, max_val = min_max_scale(series)
         X, y = create_sequences(scaled, look_back)
         
-        # Train simple linear regression on each sequence
         coeffs = []
         for i in range(len(X)):
             Xi = np.vstack([X[i], np.ones(look_back)]).T
@@ -103,20 +87,26 @@ if uploaded_file is not None:
             w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
             coeffs.append(w)
         
-        # Use last look_back sequence to forecast
+        # ── Progress bar setup ──
+        progress_text = "Forecasting..."
+        my_bar = st.progress(0, text=progress_text)
+
         last_seq = scaled[-look_back:]
         future_scaled = []
-        for _ in range(forecast_horizon):
+        for i in range(forecast_horizon):
+            time.sleep(0.2)  # optional: simulate computation
             Xi = np.vstack([last_seq, np.ones(look_back)]).T
             avg_w = np.mean(coeffs, axis=0)
             next_pred = Xi @ avg_w
             next_val = next_pred.mean()
             future_scaled.append(next_val)
             last_seq = np.append(last_seq[1:], next_val)
-        
+            my_bar.progress((i+1)/forecast_horizon, text=progress_text)
+
+        my_bar.empty()  # remove progress bar
+
         future_vals = inverse_scale(np.array(future_scaled), min_val, max_val)
         
-        # Metrics
         y_true_scaled = y[-look_back:]
         y_pred_scaled = np.mean(np.array(coeffs)[:,0]) * last_seq + np.mean(np.array(coeffs)[:,1])
         y_true = inverse_scale(y_true_scaled, min_val, max_val)
@@ -124,9 +114,6 @@ if uploaded_file is not None:
         
         return rmse(y_true, y_pred), mae(y_true, y_pred), mape(y_true, y_pred), future_vals
 
-    # ──────────────────────────────────────────────
-    # TRAIN MODEL & FORECAST
-    # ──────────────────────────────────────────────
     if len(values) > look_back + 3:
         rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back)
         
