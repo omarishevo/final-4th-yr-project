@@ -67,7 +67,6 @@ if uploaded_file is not None:
         # Add more crop descriptions as needed
     }
     st.markdown(f"**Selected Crop:** {crop_selected}")
-    st.markdown(f"**Crop Context:** {crop_descriptions.get(crop_selected,' description available.')}")
 
     # ──────────────────────────────────────────────
     # DATA SUMMARY
