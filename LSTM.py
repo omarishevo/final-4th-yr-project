@@ -17,7 +17,7 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast ")
+st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
 st.markdown("""
 This dashboard forecasts agricultural production in Kenya using historical FAOSTAT data (1960–2020).  
 The forecast uses a **rolling-window linear regression** method implemented in NumPy.
@@ -49,29 +49,33 @@ if uploaded_file is not None:
     # ──────────────────────────────────────────────
     crop_list = sorted(df["Item"].unique())
     crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
-    look_back = st.sidebar.slider("Look-back Window (years)", 3, 60, 5)
-    forecast_horizon = st.sidebar.slider("Forecast Horizon (years)", 1, 5, 3)
+
+    # Prepare series for selected crop
+    series_df = df[df["Item"] == crop_selected].sort_values("Year")
+    values = series_df["Value"].values
+    years = series_df["Year"].values
+
+    # Auto-adjust look-back and forecast horizon based on data points
+    max_look_back = max(1, len(values) - 1)  # at least 1
+    look_back = st.sidebar.slider("Look-back Window (years)", 1, max_look_back, min(5, max_look_back))
+
+    max_forecast_horizon = max(1, len(values) - look_back)
+    forecast_horizon = st.sidebar.slider("Forecast Horizon (years)", 1, max_forecast_horizon, min(3, max_forecast_horizon))
 
     st.sidebar.markdown("""
 **Look-back Window:** Number of past years used to predict the next year.  
 **Forecast Horizon:** Number of years to predict into the future.
 """)
 
-    # ──────────────────────────────────────────────
-    # PREPARE DATA
-    # ──────────────────────────────────────────────
-    series_df = df[df["Item"] == crop_selected].sort_values("Year")
-    values = series_df["Value"].values
-    years = series_df["Year"].values
+    st.markdown(f"**Selected Crop:** {crop_selected}")
 
     # Crop descriptions
     crop_descriptions = {
         "Maize": "Staple food crop in Kenya, used for human consumption and livestock feed.",
         "Wheat": "Important cereal crop, grown in Rift Valley and Eastern regions.",
         "Rice": "Grown mainly in Mwea irrigation scheme.",
-        # Add more crops if desired
+        # Add more crops as needed
     }
-    st.markdown(f"**Selected Crop:** {crop_selected}")
     st.markdown(f"**Crop Context:** {crop_descriptions.get(crop_selected,'No description available.')}")
 
     # ──────────────────────────────────────────────
@@ -159,7 +163,7 @@ if uploaded_file is not None:
     # ──────────────────────────────────────────────
     # LOOK-BACK WINDOW ILLUSTRATION
     # ──────────────────────────────────────────────
-    st.subheader("🔍 Look-back Window ")
+    st.subheader("🔍 Look-back Window Illustration")
     lookback_example = values[-look_back:]
     lookback_years = years[-look_back:]
     lookback_df = pd.DataFrame({"Year": lookback_years, "Value": lookback_example})
@@ -174,65 +178,61 @@ if uploaded_file is not None:
     # ──────────────────────────────────────────────
     # RUN FORECAST
     # ──────────────────────────────────────────────
-    if len(values) > look_back + forecast_horizon:
-        rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back, forecast_horizon)
-        
-        # Metrics
-        st.subheader("📊 Forecast Metrics")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("RMSE", f"{rmse_val:,.0f}", "Average deviation in tonnes")
-        col2.metric("MAE", f"{mae_val:,.0f}", "Mean absolute deviation")
-        col3.metric("MAPE (%)", f"{mape_val:.2f}", "Average % error vs historical data")
-        
-        future_years = list(range(years.max()+1, years.max()+1+forecast_horizon))
-        forecast_df = pd.DataFrame({"Year": future_years,"Value": future_vals,"Type":"Forecast"})
-        history_df = series_df[["Year","Value"]].copy()
-        history_df["Type"] = "Actual"
-        combined = pd.concat([history_df, forecast_df])
-        
-        # Forecast growth table
-        st.subheader("📈 Forecast Growth")
-        growth_percent = 100 * (future_vals / values[-1] - 1)
-        forecast_growth = pd.DataFrame({
-            "Year": future_years,
-            "Forecast": future_vals,
-            "Change (%)": growth_percent
-        })
-        st.table(forecast_growth.style.format({"Forecast": "{:,.0f}", "Change (%)": "{:.2f}%"}))
+    rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back, forecast_horizon)
+    
+    # Metrics
+    st.subheader("📊 Forecast Metrics")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("RMSE", f"{rmse_val:,.0f}", "Average deviation in tonnes")
+    col2.metric("MAE", f"{mae_val:,.0f}", "Mean absolute deviation")
+    col3.metric("MAPE (%)", f"{mape_val:.2f}", "Average % error vs historical data")
+    
+    future_years = list(range(years.max()+1, years.max()+1+forecast_horizon))
+    forecast_df = pd.DataFrame({"Year": future_years,"Value": future_vals,"Type":"Forecast"})
+    history_df = series_df[["Year","Value"]].copy()
+    history_df["Type"] = "Actual"
+    combined = pd.concat([history_df, forecast_df])
+    
+    # Forecast growth table
+    st.subheader("📈 Forecast Growth")
+    growth_percent = 100 * (future_vals / values[-1] - 1)
+    forecast_growth = pd.DataFrame({
+        "Year": future_years,
+        "Forecast": future_vals,
+        "Change (%)": growth_percent
+    })
+    st.table(forecast_growth.style.format({"Forecast": "{:,.0f}", "Change (%)": "{:.2f}%"}))
 
-        # Interactive chart with uncertainty band ±10%
-        st.subheader("📈 Actual vs Forecast")
-        forecast_df["Lower"] = forecast_df["Value"] * 0.9
-        forecast_df["Upper"] = forecast_df["Value"] * 1.1
-        band_chart = alt.Chart(forecast_df).mark_area(color="#fdae6b", opacity=0.3).encode(
-            x="Year:Q",
-            y="Lower:Q",
-            y2="Upper:Q"
-        )
-        line_chart = alt.Chart(combined).mark_line(point=True).encode(
-            x=alt.X("Year:Q", axis=alt.Axis(format="d")),
-            y=alt.Y("Value:Q", title="Production (tonnes)", axis=alt.Axis(format="~s")),
-            color=alt.Color("Type:N", scale=alt.Scale(domain=["Actual","Forecast"], range=["#2d8a45","#e74c3c"])),
-            strokeDash=alt.condition(alt.datum.Type=="Forecast", alt.value([6,4]), alt.value([0])),
-            tooltip=["Year","Value","Type"]
-        ).interactive()
-        st.altair_chart(line_chart + band_chart, use_container_width=True)
+    # Interactive chart with uncertainty band ±10%
+    st.subheader("📈 Actual vs Forecast")
+    forecast_df["Lower"] = forecast_df["Value"] * 0.9
+    forecast_df["Upper"] = forecast_df["Value"] * 1.1
+    band_chart = alt.Chart(forecast_df).mark_area(color="#fdae6b", opacity=0.3).encode(
+        x="Year:Q",
+        y="Lower:Q",
+        y2="Upper:Q"
+    )
+    line_chart = alt.Chart(combined).mark_line(point=True).encode(
+        x=alt.X("Year:Q", axis=alt.Axis(format="d")),
+        y=alt.Y("Value:Q", title="Production (tonnes)", axis=alt.Axis(format="~s")),
+        color=alt.Color("Type:N", scale=alt.Scale(domain=["Actual","Forecast"], range=["#2d8a45","#e74c3c"])),
+        strokeDash=alt.condition(alt.datum.Type=="Forecast", alt.value([6,4]), alt.value([0])),
+        tooltip=["Year","Value","Type"]
+    ).interactive()
+    st.altair_chart(line_chart + band_chart, use_container_width=True)
 
-        # Forecast explanation
-        st.subheader("📝 Forecast Explanation")
-        st.info(f"""
+    # Forecast explanation
+    st.subheader("📝 Forecast Explanation")
+    st.info(f"""
 The forecast uses the last **{look_back} years** of production to predict the next {forecast_horizon} year(s).  
-.  
+It is a rolling-window linear regression model implemented in NumPy.  
 
-
+⚠️ Assumption: Past trends continue; external events like droughts or policy changes are not accounted for.
 """)
 
-        # Download button
-        csv = combined.to_csv(index=False)
-        st.download_button("📥 Download Forecast Data", csv, "forecast.csv", "text/csv")
-
-    else:
-        st.warning("Not enough data points for selected look-back window or forecast horizon.")
+    # Download button
+    csv = combined.to_csv(index=False)
+    st.download_button("📥 Download Forecast Data", csv, "forecast.csv", "text/csv")
 
 else:
     st.info("Upload your FAOSTAT CSV dataset to begin forecasting.")
