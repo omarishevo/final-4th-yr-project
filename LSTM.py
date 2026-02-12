@@ -17,10 +17,10 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
+st.title("🌾 Kenya Agricultural Production Forecast ")
 st.markdown("""
 Forecast agricultural production in Kenya using FAOSTAT data (1960–2020).
-Model: Rolling-window Linear Regression implemented in NumPy.
+
 Forecast Horizon: 2021–2025 (5 Years)
 """)
 
