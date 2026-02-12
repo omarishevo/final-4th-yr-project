@@ -17,7 +17,7 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast (NumPy, CSV Only)")
+st.title("🌾 Kenya Agricultural Production Forecast ")
 st.markdown("Lightweight Forecast using historical FAOSTAT data (CSV)")
 
 # ──────────────────────────────────────────────
