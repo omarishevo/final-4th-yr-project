@@ -22,10 +22,22 @@ st.markdown("Lightweight Forecast using historical FAOSTAT data")
 # ──────────────────────────────────────────────
 # DATA UPLOAD
 # ──────────────────────────────────────────────
-uploaded_file = st.file_uploader("Upload Excel dataset (FAOSTAT)", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload Excel (.xlsx) or CSV dataset (FAOSTAT)", type=["xlsx", "csv"])
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+    try:
+        if uploaded_file.name.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file)
+        elif uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            st.error("File must be .xlsx or .csv")
+            st.stop()
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        st.stop()
+
+    # Filter production data
     df = df[df["Element"] == "Production"]
     df = df[df["Year"].between(1960, 2020)]
     df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
@@ -86,7 +98,6 @@ if uploaded_file is not None:
         # Train simple linear regression on each sequence
         coeffs = []
         for i in range(len(X)):
-            # Add bias term
             Xi = np.vstack([X[i], np.ones(look_back)]).T
             yi = y[i]
             w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
@@ -144,4 +155,4 @@ if uploaded_file is not None:
     else:
         st.warning("Not enough data points for selected look-back window.")
 else:
-    st.info("Upload your FAOSTAT Excel dataset to begin forecasting.")
+    st.info("Upload your FAOSTAT dataset (Excel or CSV) to begin forecasting.")
