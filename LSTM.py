@@ -17,7 +17,7 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
+st.title("🌾 Kenya Agricultural Production Forecast ")
 st.markdown("""
 Forecast agricultural production in Kenya using FAOSTAT data (1960–2020).
 Model: Linear Regression implemented in NumPy.
