@@ -1,5 +1,5 @@
 """
-Kenya Agricultural Forecast Dashboard (NumPy Version)
+Kenya Agricultural Forecast Dashboard.
 1960–2020 Data → Forecast Horizon
 Omari Galana Shevo – MUST
 """
@@ -20,7 +20,7 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
 st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
 st.markdown("""
 This dashboard forecasts agricultural production in Kenya using historical FAOSTAT data (1960–2020).  
-The forecasting method is a **rolling-window linear regression** implemented in NumPy.  
+  
 """)
 
 # ──────────────────────────────────────────────
@@ -179,7 +179,7 @@ if uploaded_file is not None:
         csv = combined.to_csv(index=False)
         st.download_button("📥 Download Forecast Data", csv, "forecast.csv", "text/csv")
 
-        st.info("Forecasts are generated using a rolling-window linear regression method (NumPy only). This model assumes past trends continue and does not account for external shocks (e.g., droughts).")
+
     else:
         st.warning("Not enough data points for selected look-back window or forecast horizon.")
 
