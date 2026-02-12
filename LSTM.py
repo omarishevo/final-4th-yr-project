@@ -13,14 +13,38 @@ import time
 # ──────────────────────────────────────────────
 # PAGE CONFIG
 # ──────────────────────────────────────────────
-st.set_page_config(page_title="Kenya Agricultural Forecast",
-                   page_icon="🌾",
-                   layout="wide")
+st.set_page_config(
+    page_title="Kenya Agricultural Forecast",
+    page_icon="🌾",
+    layout="wide"
+)
 
-st.title("🌾 Kenya Agricultural Production Forecast ")
+# ──────────────────────────────────────────────
+# GLOBAL STYLES
+# ──────────────────────────────────────────────
 st.markdown("""
-Forecast agricultural production in Kenya using FAOSTAT data (1960–2020).
-Model: Linear Regression implemented in NumPy.
+<style>
+    .stApp {
+        background-color: #F5F7F2;
+    }
+    .stMetric {
+        background-color: #E8F5E9;
+        padding: 10px;
+        border-radius: 10px;
+    }
+    .stSidebar .sidebar-content {
+        background-color: #F0F4F1;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ──────────────────────────────────────────────
+# TITLE
+# ──────────────────────────────────────────────
+st.title("🌾 Kenya Agricultural Production Forecast")
+st.markdown("""
+Forecast agricultural production in Kenya using FAOSTAT data (1960–2020).  
+**Model:** Linear Regression implemented in NumPy.
 """)
 
 # ──────────────────────────────────────────────
@@ -71,9 +95,9 @@ if uploaded_file is not None:
     years = series_df["Year"].values
 
     st.subheader("📋 Historical Data Summary")
-    st.write(series_df.describe())
+    st.dataframe(series_df.describe().transpose())
 
-    hist_chart = alt.Chart(series_df).mark_line(point=True).encode(
+    hist_chart = alt.Chart(series_df).mark_line(point=True, color="#2E7D32").encode(
         x="Year:Q",
         y=alt.Y("Value:Q", title="Production (tonnes)", axis=alt.Axis(format="~s")),
         tooltip=["Year", "Value"]
@@ -136,7 +160,6 @@ if uploaded_file is not None:
             seq_with_bias = np.append(last_sequence, 1)
             next_pred = seq_with_bias @ w
             future_predictions.append(next_pred)
-
             last_sequence = np.append(last_sequence[1:], next_pred)
             progress.progress((i + 1) / forecast_horizon)
             time.sleep(0.05)
@@ -159,7 +182,7 @@ if uploaded_file is not None:
         # ──────────────────────────────────────────
         # METRICS
         # ──────────────────────────────────────────
-        st.subheader("📊 Model Performance ")
+        st.subheader("📊 Model Performance")
         c1, c2, c3 = st.columns(3)
         c1.metric("RMSE", f"{rmse_val:,.0f}")
         c2.metric("MAE", f"{mae_val:,.0f}")
@@ -177,7 +200,13 @@ if uploaded_file is not None:
         chart = alt.Chart(combined).mark_line(point=True).encode(
             x=alt.X("Year:Q", axis=alt.Axis(format="d")),
             y=alt.Y("Value:Q", title="Production (tonnes)", axis=alt.Axis(format="~s")),
-            color="Type:N",
+            color=alt.Color(
+                "Type:N",
+                scale=alt.Scale(
+                    domain=["Actual", "Forecast"],
+                    range=["#2E7D32", "#FF8F00"]
+                )
+            ),
             tooltip=["Year", "Value", "Type"]
         ).interactive()
 
@@ -186,11 +215,12 @@ if uploaded_file is not None:
         # ──────────────────────────────────────────
         # DOWNLOAD
         # ──────────────────────────────────────────
-        csv = combined.to_csv(index=False)
-        st.download_button("📥 Download Forecast CSV",
-                           csv,
-                           "kenya_agriculture_forecast.csv",
-                           "text/csv")
+        st.download_button(
+            "📥 Download Forecast CSV",
+            combined.to_csv(index=False),
+            "kenya_agriculture_forecast.csv",
+            "text/csv"
+        )
 
     else:
         st.warning("Not enough data for selected look-back window.")
