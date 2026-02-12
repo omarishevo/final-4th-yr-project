@@ -17,7 +17,7 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
+st.title("🌾 Kenya Agricultural Production Forecast ")
 st.markdown("""
 This dashboard forecasts agricultural production in Kenya using historical FAOSTAT data (1960–2020).  
 The forecast uses a **rolling-window linear regression** method implemented in NumPy.
@@ -49,7 +49,7 @@ if uploaded_file is not None:
     # ──────────────────────────────────────────────
     crop_list = sorted(df["Item"].unique())
     crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
-    look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
+    look_back = st.sidebar.slider("Look-back Window (years)", 3, 60, 5)
     forecast_horizon = st.sidebar.slider("Forecast Horizon (years)", 1, 5, 3)
 
     st.sidebar.markdown("""
@@ -159,7 +159,7 @@ if uploaded_file is not None:
     # ──────────────────────────────────────────────
     # LOOK-BACK WINDOW ILLUSTRATION
     # ──────────────────────────────────────────────
-    st.subheader("🔍 Look-back Window Illustration")
+    st.subheader("🔍 Look-back Window ")
     lookback_example = values[-look_back:]
     lookback_years = years[-look_back:]
     lookback_df = pd.DataFrame({"Year": lookback_years, "Value": lookback_example})
@@ -222,9 +222,9 @@ if uploaded_file is not None:
         st.subheader("📝 Forecast Explanation")
         st.info(f"""
 The forecast uses the last **{look_back} years** of production to predict the next {forecast_horizon} year(s).  
-It is a rolling-window linear regression model implemented in NumPy.  
+.  
 
-⚠️ Assumption: Past trends continue; external events like droughts or policy changes are not accounted for.
+
 """)
 
         # Download button
