@@ -59,7 +59,7 @@ if uploaded_file is not None:
     values = series_df["Value"].values
     years = series_df["Year"].values
 
-    # Optional crop description
+    # mandatory crop description
     crop_descriptions = {
         "Maize": "Staple food crop in Kenya, used for human consumption and livestock feed.",
         "Wheat": "Important cereal crop, grown in Rift Valley and Eastern regions.",
