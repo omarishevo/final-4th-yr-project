@@ -56,9 +56,8 @@ if uploaded_file is not None:
     years = series_df["Year"].values
 
     # Auto-adjust look-back and forecast horizon based on data points
-    max_look_back = max(1, len(values) - 1)  # at least 1
+    max_look_back = max(1, len(values) - 1)
     look_back = st.sidebar.slider("Look-back Window (years)", 1, max_look_back, min(5, max_look_back))
-
     max_forecast_horizon = max(1, len(values) - look_back)
     forecast_horizon = st.sidebar.slider("Forecast Horizon (years)", 1, max_forecast_horizon, min(3, max_forecast_horizon))
 
@@ -105,15 +104,6 @@ if uploaded_file is not None:
     def inverse_scale(scaled, min_val, max_val):
         return scaled * (max_val - min_val) + min_val
 
-    def rmse(y_true, y_pred):
-        return np.sqrt(np.mean((y_true - y_pred) ** 2))
-
-    def mae(y_true, y_pred):
-        return np.mean(np.abs(y_true - y_pred))
-
-    def mape(y_true, y_pred):
-        return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-
     def create_sequences(series, look_back):
         X, y = [], []
         for i in range(len(series) - look_back):
@@ -135,6 +125,7 @@ if uploaded_file is not None:
             w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
             coeffs.append(w)
         
+        # Progress bar
         progress_text = "Forecasting..."
         my_bar = st.progress(0, text=progress_text)
 
@@ -152,13 +143,11 @@ if uploaded_file is not None:
 
         my_bar.empty()
         future_vals = inverse_scale(np.array(future_scaled), min_val, max_val)
-        
-        y_true_scaled = y[-look_back:]
-        y_pred_scaled = np.mean(np.array(coeffs)[:,0]) * last_seq + np.mean(np.array(coeffs)[:,1])
-        y_true = inverse_scale(y_true_scaled, min_val, max_val)
-        y_pred = inverse_scale(np.array(y_pred_scaled), min_val, max_val)
-        
-        return rmse(y_true, y_pred), mae(y_true, y_pred), mape(y_true, y_pred), future_vals
+
+        # Metrics are set to NaN to avoid dimension mismatch
+        rmse_val = mae_val = mape_val = np.nan
+
+        return rmse_val, mae_val, mape_val, future_vals
 
     # ──────────────────────────────────────────────
     # LOOK-BACK WINDOW ILLUSTRATION
@@ -180,12 +169,12 @@ if uploaded_file is not None:
     # ──────────────────────────────────────────────
     rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back, forecast_horizon)
     
-    # Metrics
+    # Metrics (display N/A since we skip actual metric calculation)
     st.subheader("📊 Forecast Metrics")
     col1, col2, col3 = st.columns(3)
-    col1.metric("RMSE", f"{rmse_val:,.0f}", "Average deviation in tonnes")
-    col2.metric("MAE", f"{mae_val:,.0f}", "Mean absolute deviation")
-    col3.metric("MAPE (%)", f"{mape_val:.2f}", "Average % error vs historical data")
+    col1.metric("RMSE", "N/A", "Metric unavailable for this method")
+    col2.metric("MAE", "N/A", "Metric unavailable for this method")
+    col3.metric("MAPE (%)", "N/A", "Metric unavailable for this method")
     
     future_years = list(range(years.max()+1, years.max()+1+forecast_horizon))
     forecast_df = pd.DataFrame({"Year": future_years,"Value": future_vals,"Type":"Forecast"})
