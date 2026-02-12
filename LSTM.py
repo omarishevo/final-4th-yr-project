@@ -1,5 +1,5 @@
 """
-Kenya Agricultural Forecast Dashboard (NumPy Version with Progress Bar)
+Kenya Agricultural Forecast Dashboard (NumPy Version, CSV Only)
 1960–2020 Data → 3-Year Forecast (2021–2023)
 Omari Galana Shevo – MUST
 """
@@ -17,32 +17,30 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
-st.markdown("Lightweight Forecast using historical FAOSTAT data")
+st.title("🌾 Kenya Agricultural Production Forecast (NumPy, CSV Only)")
+st.markdown("Lightweight Forecast using historical FAOSTAT data (CSV)")
 
 # ──────────────────────────────────────────────
-# DATA UPLOAD
+# DATA UPLOAD (CSV ONLY)
 # ──────────────────────────────────────────────
-uploaded_file = st.file_uploader("Upload Excel (.xlsx) or CSV dataset (FAOSTAT)", type=["xlsx", "csv"])
+uploaded_file = st.file_uploader("Upload CSV dataset (FAOSTAT)", type=["csv"])
 
 if uploaded_file is not None:
     try:
-        if uploaded_file.name.endswith(".xlsx"):
-            df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        else:
-            st.error("File must be .xlsx or .csv")
-            st.stop()
+        df = pd.read_csv(uploaded_file)
     except Exception as e:
-        st.error(f"Error reading file: {e}")
+        st.error(f"Error reading CSV file: {e}")
         st.stop()
 
+    # Filter production data
     df = df[df["Element"] == "Production"]
     df = df[df["Year"].between(1960, 2020)]
     df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
     df = df.dropna(subset=["Value"])
 
+    # ──────────────────────────────────────────────
+    # SIDEBAR
+    # ──────────────────────────────────────────────
     crop_list = sorted(df["Item"].unique())
     crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
     look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
@@ -51,6 +49,9 @@ if uploaded_file is not None:
     values = series_df["Value"].values
     years = series_df["Year"].values
 
+    # ──────────────────────────────────────────────
+    # SCALING & METRICS
+    # ──────────────────────────────────────────────
     def min_max_scale(array):
         min_val = array.min()
         max_val = array.max()
@@ -69,6 +70,9 @@ if uploaded_file is not None:
     def mape(y_true, y_pred):
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
+    # ──────────────────────────────────────────────
+    # SEQUENCE DATA
+    # ──────────────────────────────────────────────
     def create_sequences(series, look_back):
         X, y = [], []
         for i in range(len(series) - look_back):
@@ -76,6 +80,9 @@ if uploaded_file is not None:
             y.append(series[i+look_back])
         return np.array(X), np.array(y)
 
+    # ──────────────────────────────────────────────
+    # ROLLING LINEAR FORECAST WITH PROGRESS BAR
+    # ──────────────────────────────────────────────
     def train_forecast(series, look_back, forecast_horizon=3):
         scaled, min_val, max_val = min_max_scale(series)
         X, y = create_sequences(scaled, look_back)
@@ -87,7 +94,7 @@ if uploaded_file is not None:
             w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
             coeffs.append(w)
         
-        # ── Progress bar setup ──
+        # Progress bar
         progress_text = "Forecasting..."
         my_bar = st.progress(0, text=progress_text)
 
@@ -114,6 +121,9 @@ if uploaded_file is not None:
         
         return rmse(y_true, y_pred), mae(y_true, y_pred), mape(y_true, y_pred), future_vals
 
+    # ──────────────────────────────────────────────
+    # TRAIN & FORECAST
+    # ──────────────────────────────────────────────
     if len(values) > look_back + 3:
         rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back)
         
@@ -142,4 +152,4 @@ if uploaded_file is not None:
     else:
         st.warning("Not enough data points for selected look-back window.")
 else:
-    st.info("Upload your FAOSTAT dataset (Excel or CSV) to begin forecasting.")
+    st.info("Upload your FAOSTAT dataset (CSV only) to begin forecasting.")
