@@ -159,7 +159,7 @@ if uploaded_file is not None:
         # ──────────────────────────────────────────
         # METRICS
         # ──────────────────────────────────────────
-        st.subheader("📊 Model Performance (Last 5 Known Years)")
+        st.subheader("📊 Model Performance ")
         c1, c2, c3 = st.columns(3)
         c1.metric("RMSE", f"{rmse_val:,.0f}")
         c2.metric("MAE", f"{mae_val:,.0f}")
