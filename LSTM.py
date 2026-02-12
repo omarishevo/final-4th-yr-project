@@ -1,5 +1,5 @@
 """
-Kenya Agricultural LSTM Forecast Dashboard (PyTorch Version)
+Kenya Agricultural Forecast Dashboard (Pure NumPy Version)
 1960–2020 Data → 3-Year Forecast (2021–2023)
 Omari Galana Shevo – MUST
 """
@@ -8,19 +8,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
-import math
-import torch
-import torch.nn as nn
 
 # ──────────────────────────────────────────────
 # PAGE CONFIG
 # ──────────────────────────────────────────────
-st.set_page_config(page_title="Kenya Agricultural LSTM Forecast (PyTorch)",
+st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast (PyTorch LSTM)")
-st.markdown("Deep Learning Forecast using 1960–2020 FAOSTAT Data")
+st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
+st.markdown("Lightweight Forecast using 1960–2020 FAOSTAT Data")
 
 # ──────────────────────────────────────────────
 # LOAD DATA
@@ -46,14 +43,13 @@ except:
 crop_list = sorted(df["Item"].unique())
 crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
 look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
-epochs = st.sidebar.slider("Training Epochs", 20, 150, 80)
-lr = st.sidebar.slider("Learning Rate", 0.001, 0.01, 0.005)
 
 # ──────────────────────────────────────────────
 # PREPARE SERIES
 # ──────────────────────────────────────────────
 series_df = df[df["Item"] == crop_selected].sort_values("Year")
-values = series_df["Value"].values.reshape(-1, 1)
+values = series_df["Value"].values
+years = series_df["Year"].values
 
 # ──────────────────────────────────────────────
 # SCALING & METRICS
@@ -68,7 +64,7 @@ def inverse_scale(scaled, min_val, max_val):
     return scaled * (max_val - min_val) + min_val
 
 def rmse(y_true, y_pred):
-    return np.sqrt(np.mean((y_true - y_pred)**2))
+    return np.sqrt(np.mean((y_true - y_pred) ** 2))
 
 def mae(y_true, y_pred):
     return np.mean(np.abs(y_true - y_pred))
@@ -77,115 +73,85 @@ def mape(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
 # ──────────────────────────────────────────────
-# CREATE SEQUENCES
+# SEQUENCE DATA
 # ──────────────────────────────────────────────
-def create_sequences(data, look_back):
+def create_sequences(series, look_back):
     X, y = [], []
-    for i in range(len(data) - look_back):
-        X.append(data[i:i+look_back])
-        y.append(data[i+look_back])
+    for i in range(len(series) - look_back):
+        X.append(series[i:i+look_back])
+        y.append(series[i+look_back])
     return np.array(X), np.array(y)
 
 # ──────────────────────────────────────────────
-# PYTORCH LSTM MODEL
+# ROLLING LINEAR FORECAST
 # ──────────────────────────────────────────────
-class LSTMModel(nn.Module):
-    def __init__(self, input_size=1, hidden_size=64, num_layers=2):
-        super(LSTMModel, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.dropout = nn.Dropout(0.2)
-        self.fc = nn.Linear(hidden_size, 1)
-        
-    def forward(self, x):
-        out, _ = self.lstm(x)
-        out = out[:, -1, :]  # take last timestep
-        out = self.dropout(out)
-        out = self.fc(out)
-        return out
-
-# ──────────────────────────────────────────────
-# TRAIN & FORECAST FUNCTION
-# ──────────────────────────────────────────────
-@st.cache_resource
-def train_lstm_pytorch(series, look_back, epochs, lr):
+def train_forecast(series, look_back, forecast_horizon=3):
     scaled, min_val, max_val = min_max_scale(series)
     X, y = create_sequences(scaled, look_back)
     
-    X_train, X_test = X[:int(0.8*len(X))], X[int(0.8*len(X)):]
-    y_train, y_test = y[:int(0.8*len(y))], y[int(0.8*len(y)):]
+    # Train simple linear regression on each sequence
+    coeffs = []
+    for i in range(len(X)):
+        # Add bias term
+        Xi = np.vstack([X[i], np.ones(look_back)]).T
+        yi = y[i]
+        # Solve for weights: w = (X^T X)^-1 X^T y
+        w = np.linalg.lstsq(Xi, np.full(look_back, yi), rcond=None)[0]
+        coeffs.append(w)
     
-    # Convert to PyTorch tensors
-    X_train_t = torch.tensor(X_train, dtype=torch.float32).unsqueeze(-1)
-    y_train_t = torch.tensor(y_train, dtype=torch.float32).unsqueeze(-1)
-    X_test_t = torch.tensor(X_test, dtype=torch.float32).unsqueeze(-1)
-    y_test_t = torch.tensor(y_test, dtype=torch.float32).unsqueeze(-1)
-    
-    model = LSTMModel()
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    
-    for epoch in range(epochs):
-        model.train()
-        optimizer.zero_grad()
-        output = model(X_train_t)
-        loss = criterion(output, y_train_t)
-        loss.backward()
-        optimizer.step()
-    
-    # Predictions
-    model.eval()
-    with torch.no_grad():
-        test_pred = model(X_test_t).numpy().flatten()
-    
-    y_test_actual = inverse_scale(y_test, min_val, max_val)
-    test_pred_actual = inverse_scale(test_pred, min_val, max_val)
-    
-    # Metrics
-    return_rmse = rmse(y_test_actual, test_pred_actual)
-    return_mae = mae(y_test_actual, test_pred_actual)
-    return_mape = mape(y_test_actual, test_pred_actual)
-    
-    # 3-year forecast
+    # Use last look_back sequence to forecast
     last_seq = scaled[-look_back:]
-    future = []
-    model.eval()
-    with torch.no_grad():
-        for _ in range(3):
-            seq_t = torch.tensor(last_seq.reshape(1, look_back, 1), dtype=torch.float32)
-            next_pred = model(seq_t).numpy()[0][0]
-            future.append(next_pred)
-            last_seq = np.append(last_seq[1:], next_pred)
+    future_scaled = []
+    for _ in range(forecast_horizon):
+        Xi = np.vstack([last_seq, np.ones(look_back)]).T
+        # Use average weights from all sequences
+        avg_w = np.mean(coeffs, axis=0)
+        next_pred = Xi @ avg_w
+        next_val = next_pred.mean()  # take mean prediction
+        future_scaled.append(next_val)
+        last_seq = np.append(last_seq[1:], next_val)
     
-    future_vals = inverse_scale(np.array(future), min_val, max_val)
-    return return_rmse, return_mae, return_mape, future_vals.flatten(), model
+    # Inverse scale
+    future_vals = inverse_scale(np.array(future_scaled), min_val, max_val)
+    
+    # Metrics on last sequence predictions
+    y_true_scaled = y[-look_back:]
+    y_pred_scaled = np.mean(np.array(coeffs)[:,0]) * last_seq + np.mean(np.array(coeffs)[:,1])
+    y_true = inverse_scale(y_true_scaled, min_val, max_val)
+    y_pred = inverse_scale(np.array(y_pred_scaled), min_val, max_val)
+    
+    return rmse(y_true, y_pred), mae(y_true, y_pred), mape(y_true, y_pred), future_vals
 
 # ──────────────────────────────────────────────
-# TRAIN MODEL
+# TRAIN MODEL & FORECAST
 # ──────────────────────────────────────────────
-if len(values) > look_back + 5:
-    rmse_val, mae_val, mape_val, future_vals, model = train_lstm_pytorch(values, look_back, epochs, lr)
+if len(values) > look_back + 3:
+    rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back)
     
-    st.subheader("📊 Model Validation Metrics")
+    st.subheader("📊 Forecast Metrics")
     col1, col2, col3 = st.columns(3)
     col1.metric("RMSE", f"{rmse_val:,.0f}")
     col2.metric("MAE", f"{mae_val:,.0f}")
     col3.metric("MAPE (%)", f"{mape_val:.2f}")
     
+    # Build forecast dataframe
     future_years = [2021, 2022, 2023]
     forecast_df = pd.DataFrame({"Year": future_years,"Value": future_vals,"Type":"Forecast"})
     history_df = series_df[["Year","Value"]].copy()
     history_df["Type"] = "Actual"
     combined = pd.concat([history_df, forecast_df])
     
-    st.subheader("📈 Actual vs LSTM Forecast")
+    # Plot
+    st.subheader("📈 Actual vs Forecast")
     chart = alt.Chart(combined).mark_line(point=True).encode(
         x=alt.X("Year:Q", axis=alt.Axis(format="d")),
         y=alt.Y("Value:Q", title="Production (tonnes)", axis=alt.Axis(format="~s")),
         color=alt.Color("Type:N", scale=alt.Scale(domain=["Actual","Forecast"], range=["#2d8a45","#e74c3c"])),
-        strokeDash=alt.condition(alt.datum.Type == "Forecast", alt.value([6,4]), alt.value([0])),
+        strokeDash=alt.condition(alt.datum.Type=="Forecast", alt.value([6,4]), alt.value([0])),
         tooltip=["Year","Value","Type"]
     ).properties(height=450).interactive()
     st.altair_chart(chart, use_container_width=True)
-    st.info("Forecast horizon: 3 years (2021–2023). Model trained on 1960–2020 historical production data using a two-layer PyTorch LSTM network.")
+    
+    st.info("Forecast horizon: 3 years (2021–2023). Prediction done using lightweight rolling-window linear regression (NumPy only).")
 else:
     st.warning("Not enough data points for selected look-back window.")
