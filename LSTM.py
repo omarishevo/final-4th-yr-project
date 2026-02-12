@@ -1,6 +1,6 @@
 """
-Kenya Agricultural Forecast Dashboard (NumPy Version, CSV Only)
-1960–2020 Data → 3-Year Forecast (2021–2023)
+Kenya Agricultural Forecast Dashboard (NumPy Version)
+1960–2020 Data → Forecast Horizon
 Omari Galana Shevo – MUST
 """
 
@@ -17,13 +17,19 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast ")
-st.markdown("Lightweight Forecast using historical FAOSTAT data (CSV)")
+st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
+st.markdown("""
+This dashboard forecasts agricultural production in Kenya using historical FAOSTAT data (1960–2020).  
+The forecasting method is a **rolling-window linear regression** implemented in NumPy.  
+""")
 
 # ──────────────────────────────────────────────
 # DATA UPLOAD (CSV ONLY)
 # ──────────────────────────────────────────────
-uploaded_file = st.file_uploader("Upload CSV dataset (FAOSTAT)", type=["csv"])
+uploaded_file = st.file_uploader(
+    "Upload your FAOSTAT CSV dataset (must include 'Year', 'Item', 'Element', 'Value' columns)",
+    type=["csv"]
+)
 
 if uploaded_file is not None:
     try:
@@ -39,18 +45,40 @@ if uploaded_file is not None:
     df = df.dropna(subset=["Value"])
 
     # ──────────────────────────────────────────────
-    # SIDEBAR
+    # SIDEBAR OPTIONS
     # ──────────────────────────────────────────────
     crop_list = sorted(df["Item"].unique())
     crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
     look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
+    forecast_horizon = st.sidebar.slider("Forecast Horizon (years)", 1, 5, 3)
 
+    # ──────────────────────────────────────────────
+    # PREPARE DATA
+    # ──────────────────────────────────────────────
     series_df = df[df["Item"] == crop_selected].sort_values("Year")
     values = series_df["Value"].values
     years = series_df["Year"].values
 
+    # Optional crop description
+    crop_descriptions = {
+        "Maize": "Staple food crop in Kenya, used for human consumption and livestock feed.",
+        "Wheat": "Important cereal crop, grown in Rift Valley and Eastern regions.",
+        "Rice": "Grown mainly in Mwea irrigation scheme.",
+        # Add more crop descriptions as needed
+    }
+    st.markdown(f"**Selected Crop:** {crop_selected}")
+    st.markdown(f"**Crop Context:** {crop_descriptions.get(crop_selected,'No description available.')}")
+
     # ──────────────────────────────────────────────
-    # SCALING & METRICS
+    # DATA SUMMARY
+    # ──────────────────────────────────────────────
+    st.subheader("📋 Dataset Summary")
+    st.write(series_df.describe())
+    st.write(f"Data Range: {years.min()} – {years.max()}")
+    st.write(f"Number of Data Points: {len(series_df)}")
+
+    # ──────────────────────────────────────────────
+    # HELPER FUNCTIONS
     # ──────────────────────────────────────────────
     def min_max_scale(array):
         min_val = array.min()
@@ -70,9 +98,6 @@ if uploaded_file is not None:
     def mape(y_true, y_pred):
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-    # ──────────────────────────────────────────────
-    # SEQUENCE DATA
-    # ──────────────────────────────────────────────
     def create_sequences(series, look_back):
         X, y = [], []
         for i in range(len(series) - look_back):
@@ -81,7 +106,7 @@ if uploaded_file is not None:
         return np.array(X), np.array(y)
 
     # ──────────────────────────────────────────────
-    # ROLLING LINEAR FORECAST WITH PROGRESS BAR
+    # FORECAST FUNCTION WITH PROGRESS BAR
     # ──────────────────────────────────────────────
     def train_forecast(series, look_back, forecast_horizon=3):
         scaled, min_val, max_val = min_max_scale(series)
@@ -101,7 +126,7 @@ if uploaded_file is not None:
         last_seq = scaled[-look_back:]
         future_scaled = []
         for i in range(forecast_horizon):
-            time.sleep(0.2)  # optional: simulate computation
+            time.sleep(0.1)  # optional delay to visualize progress
             Xi = np.vstack([last_seq, np.ones(look_back)]).T
             avg_w = np.mean(coeffs, axis=0)
             next_pred = Xi @ avg_w
@@ -110,8 +135,7 @@ if uploaded_file is not None:
             last_seq = np.append(last_seq[1:], next_val)
             my_bar.progress((i+1)/forecast_horizon, text=progress_text)
 
-        my_bar.empty()  # remove progress bar
-
+        my_bar.empty()
         future_vals = inverse_scale(np.array(future_scaled), min_val, max_val)
         
         y_true_scaled = y[-look_back:]
@@ -122,23 +146,25 @@ if uploaded_file is not None:
         return rmse(y_true, y_pred), mae(y_true, y_pred), mape(y_true, y_pred), future_vals
 
     # ──────────────────────────────────────────────
-    # TRAIN & FORECAST
+    # RUN FORECAST
     # ──────────────────────────────────────────────
-    if len(values) > look_back + 3:
-        rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back)
+    if len(values) > look_back + forecast_horizon:
+        rmse_val, mae_val, mape_val, future_vals = train_forecast(values, look_back, forecast_horizon)
         
+        # Metrics with plain English
         st.subheader("📊 Forecast Metrics")
         col1, col2, col3 = st.columns(3)
-        col1.metric("RMSE", f"{rmse_val:,.0f}")
-        col2.metric("MAE", f"{mae_val:,.0f}")
-        col3.metric("MAPE (%)", f"{mape_val:.2f}")
+        col1.metric("RMSE", f"{rmse_val:,.0f}", "Average deviation in tonnes")
+        col2.metric("MAE", f"{mae_val:,.0f}", "Mean absolute deviation")
+        col3.metric("MAPE (%)", f"{mape_val:.2f}", "Average % error vs historical data")
         
-        future_years = [2021, 2022, 2023]
+        future_years = list(range(years.max()+1, years.max()+1+forecast_horizon))
         forecast_df = pd.DataFrame({"Year": future_years,"Value": future_vals,"Type":"Forecast"})
         history_df = series_df[["Year","Value"]].copy()
         history_df["Type"] = "Actual"
         combined = pd.concat([history_df, forecast_df])
         
+        # Interactive chart
         st.subheader("📈 Actual vs Forecast")
         chart = alt.Chart(combined).mark_line(point=True).encode(
             x=alt.X("Year:Q", axis=alt.Axis(format="d")),
@@ -148,8 +174,14 @@ if uploaded_file is not None:
             tooltip=["Year","Value","Type"]
         ).properties(height=450).interactive()
         st.altair_chart(chart, use_container_width=True)
-        st.info("Forecast horizon: 3 years (2021–2023). Prediction done using lightweight rolling-window linear regression (NumPy only).")
+
+        # Download button
+        csv = combined.to_csv(index=False)
+        st.download_button("📥 Download Forecast Data", csv, "forecast.csv", "text/csv")
+
+        st.info("Forecasts are generated using a rolling-window linear regression method (NumPy only). This model assumes past trends continue and does not account for external shocks (e.g., droughts).")
     else:
-        st.warning("Not enough data points for selected look-back window.")
+        st.warning("Not enough data points for selected look-back window or forecast horizon.")
+
 else:
-    st.info("Upload your FAOSTAT dataset (CSV only) to begin forecasting.")
+    st.info("Upload your FAOSTAT CSV dataset to begin forecasting.")
