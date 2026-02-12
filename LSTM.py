@@ -17,11 +17,10 @@ st.set_page_config(page_title="Kenya Agricultural Forecast",
                    page_icon="🌾",
                    layout="wide")
 
-st.title("🌾 Kenya Agricultural Production Forecast ")
+st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
 st.markdown("""
 Forecast agricultural production in Kenya using FAOSTAT data (1960–2020).
-
-Forecast Horizon: 2021–2025 (5 Years)
+Model: Linear Regression implemented in NumPy.
 """)
 
 # ──────────────────────────────────────────────
@@ -43,13 +42,26 @@ if uploaded_file is not None:
     df = df.dropna(subset=["Value"])
 
     # ──────────────────────────────────────────────
-    # SIDEBAR
+    # SIDEBAR SETTINGS
     # ──────────────────────────────────────────────
+    st.sidebar.header("Forecast Settings")
+
     crop_list = sorted(df["Item"].unique())
     crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
+
     look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
 
-    forecast_horizon = 5  # FIXED → 2021–2025
+    forecast_horizon = st.sidebar.slider(
+        "Forecast Years (2021–2025)",
+        min_value=1,
+        max_value=5,
+        value=5
+    )
+
+    st.sidebar.markdown("""
+- **Look-back Window:** Number of past years used to predict next year  
+- **Forecast Years:** How many years ahead to predict (max 5)
+""")
 
     # ──────────────────────────────────────────────
     # PREPARE SERIES
@@ -89,34 +101,31 @@ if uploaded_file is not None:
         return np.array(X), np.array(y)
 
     # ──────────────────────────────────────────────
-    # MODEL TRAINING + FORECAST
+    # MODEL + FORECAST
     # ──────────────────────────────────────────────
     if len(values) > look_back + 5:
 
-        # Create supervised dataset
         X, y = create_sequences(values, look_back)
 
-        # Train/Test split (last 5 actual years for metrics)
+        # Train/Test split (last 5 actual years)
         X_train, X_test = X[:-5], X[-5:]
         y_train, y_test = y[:-5], y[-5:]
 
-        # Add bias term
         X_train_bias = np.c_[X_train, np.ones(len(X_train))]
         X_test_bias = np.c_[X_test, np.ones(len(X_test))]
 
-        # Linear regression solution
+        # Linear regression
         w = np.linalg.lstsq(X_train_bias, y_train, rcond=None)[0]
 
-        # Predictions for test set
+        # Test prediction
         y_pred_test = X_test_bias @ w
 
-        # Metrics (NO dimension mismatch now)
         rmse_val = rmse(y_test, y_pred_test)
         mae_val = mae(y_test, y_pred_test)
         mape_val = mape(y_test, y_pred_test)
 
         # ──────────────────────────────────────────
-        # FUTURE FORECAST 2021–2025
+        # FUTURE FORECAST (2021–2025)
         # ──────────────────────────────────────────
         last_sequence = values[-look_back:].copy()
         future_predictions = []
@@ -134,7 +143,7 @@ if uploaded_file is not None:
 
         progress.empty()
 
-        future_years = list(range(2021, 2026))
+        future_years = list(range(2021, 2021 + forecast_horizon))
 
         forecast_df = pd.DataFrame({
             "Year": future_years,
@@ -148,7 +157,7 @@ if uploaded_file is not None:
         combined = pd.concat([history_df, forecast_df])
 
         # ──────────────────────────────────────────
-        # DISPLAY METRICS
+        # METRICS
         # ──────────────────────────────────────────
         st.subheader("📊 Model Performance (Last 5 Known Years)")
         c1, c2, c3 = st.columns(3)
@@ -159,7 +168,7 @@ if uploaded_file is not None:
         # ──────────────────────────────────────────
         # FORECAST TABLE
         # ──────────────────────────────────────────
-        st.subheader("📈 Forecast (2021–2025)")
+        st.subheader("📈 Forecast Results")
         st.dataframe(forecast_df)
 
         # ──────────────────────────────────────────
@@ -180,7 +189,7 @@ if uploaded_file is not None:
         csv = combined.to_csv(index=False)
         st.download_button("📥 Download Forecast CSV",
                            csv,
-                           "kenya_agriculture_forecast_2021_2025.csv",
+                           "kenya_agriculture_forecast.csv",
                            "text/csv")
 
     else:
