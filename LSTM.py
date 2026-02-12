@@ -10,8 +10,6 @@ import numpy as np
 import altair as alt
 import math
 
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
@@ -48,20 +46,37 @@ except:
 # SIDEBAR
 # ──────────────────────────────────────────────
 crop_list = sorted(df["Item"].unique())
-
 crop_selected = st.sidebar.selectbox("Select Crop", crop_list)
-
 look_back = st.sidebar.slider("Look-back Window (years)", 3, 10, 5)
-
 epochs = st.sidebar.slider("Training Epochs", 20, 150, 80)
 
 # ──────────────────────────────────────────────
 # PREPARE SERIES
 # ──────────────────────────────────────────────
 series_df = df[df["Item"] == crop_selected].sort_values("Year")
-
 years = series_df["Year"].values
 values = series_df["Value"].values.reshape(-1, 1)
+
+# ──────────────────────────────────────────────
+# MANUAL SCALING & METRICS
+# ──────────────────────────────────────────────
+def min_max_scale(array):
+    min_val = array.min()
+    max_val = array.max()
+    scaled = (array - min_val) / (max_val - min_val)
+    return scaled, min_val, max_val
+
+def inverse_scale(scaled, min_val, max_val):
+    return scaled * (max_val - min_val) + min_val
+
+def rmse(y_true, y_pred):
+    return np.sqrt(np.mean((y_true - y_pred)**2))
+
+def mae(y_true, y_pred):
+    return np.mean(np.abs(y_true - y_pred))
+
+def mape(y_true, y_pred):
+    return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
 # ──────────────────────────────────────────────
 # LSTM FUNCTION
@@ -69,8 +84,7 @@ values = series_df["Value"].values.reshape(-1, 1)
 @st.cache_resource
 def train_lstm(series, look_back, epochs):
 
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(series)
+    scaled, min_val, max_val = min_max_scale(series)
 
     X, y = [], []
     for i in range(len(scaled) - look_back):
@@ -90,7 +104,6 @@ def train_lstm(series, look_back, epochs):
         Dropout(0.2),
         Dense(1)
     ])
-
     model.compile(optimizer="adam", loss="mse")
 
     early_stop = EarlyStopping(patience=15, restore_best_weights=True)
@@ -102,14 +115,16 @@ def train_lstm(series, look_back, epochs):
               callbacks=[early_stop])
 
     # Predictions
-    test_pred = model.predict(X_test)
+    test_pred = model.predict(X_test).flatten()
+    y_test_actual = y_test
 
-    test_pred = scaler.inverse_transform(test_pred)
-    y_test_actual = scaler.inverse_transform(y_test.reshape(-1,1))
+    test_pred_actual = inverse_scale(test_pred, min_val, max_val)
+    y_test_actual_scaled = inverse_scale(y_test_actual, min_val, max_val)
 
-    rmse = math.sqrt(mean_squared_error(y_test_actual, test_pred))
-    mae = mean_absolute_error(y_test_actual, test_pred)
-    mape = np.mean(np.abs((y_test_actual - test_pred) / y_test_actual)) * 100
+    # Metrics
+    return_rmse = rmse(y_test_actual_scaled, test_pred_actual)
+    return_mae = mae(y_test_actual_scaled, test_pred_actual)
+    return_mape = mape(y_test_actual_scaled, test_pred_actual)
 
     # 3-year future forecast
     last_seq = scaled[-look_back:]
@@ -117,33 +132,31 @@ def train_lstm(series, look_back, epochs):
 
     for _ in range(3):
         input_seq = last_seq.reshape(1, look_back, 1)
-        next_pred = model.predict(input_seq)
-        future.append(next_pred[0][0])
-        last_seq = np.append(last_seq[1:], next_pred, axis=0)
+        next_pred = model.predict(input_seq)[0][0]
+        future.append(next_pred)
+        last_seq = np.append(last_seq[1:], next_pred)
 
-    future = scaler.inverse_transform(np.array(future).reshape(-1,1))
+    future_vals = inverse_scale(np.array(future), min_val, max_val)
 
-    return rmse, mae, mape, future.flatten(), model
+    return return_rmse, return_mae, return_mape, future_vals.flatten(), model
 
 # ──────────────────────────────────────────────
 # TRAIN MODEL
 # ──────────────────────────────────────────────
 if len(values) > look_back + 5:
 
-    rmse, mae, mape, future_vals, model = train_lstm(values, look_back, epochs)
+    rmse_val, mae_val, mape_val, future_vals, model = train_lstm(values, look_back, epochs)
 
     st.subheader("📊 Model Validation Metrics")
-
     col1, col2, col3 = st.columns(3)
-    col1.metric("RMSE", f"{rmse:,.0f}")
-    col2.metric("MAE", f"{mae:,.0f}")
-    col3.metric("MAPE (%)", f"{mape:.2f}")
+    col1.metric("RMSE", f"{rmse_val:,.0f}")
+    col2.metric("MAE", f"{mae_val:,.0f}")
+    col3.metric("MAPE (%)", f"{mape_val:.2f}")
 
     # ──────────────────────────────────────────────
-    # BUILD FORECAST DATAFRAME
+    # FORECAST DATAFRAME
     # ──────────────────────────────────────────────
     future_years = [2021, 2022, 2023]
-
     forecast_df = pd.DataFrame({
         "Year": future_years,
         "Value": future_vals,
@@ -152,7 +165,6 @@ if len(values) > look_back + 5:
 
     history_df = series_df[["Year","Value"]].copy()
     history_df["Type"] = "Actual"
-
     combined = pd.concat([history_df, forecast_df])
 
     # ──────────────────────────────────────────────
@@ -175,11 +187,9 @@ if len(values) > look_back + 5:
     ).properties(height=450).interactive()
 
     st.altair_chart(chart, use_container_width=True)
-
     st.info("""
     Forecast horizon: 3 years (2021–2023).
     Model trained on 1960–2020 historical production data using a two-layer LSTM network.
     """)
-
 else:
     st.warning("Not enough data points for selected look-back window.")
