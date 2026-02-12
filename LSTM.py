@@ -1,6 +1,6 @@
 """
 Kenya Agricultural Forecast Dashboard
-1960–2020 Data → Predict 2021–2025
+1960–2020 Historical Backtest + Forecast (2021–2025)
 Omari Galana Shevo – MUST
 """
 
@@ -13,21 +13,23 @@ import time
 # ──────────────────────────────────────────────
 # PAGE CONFIG
 # ──────────────────────────────────────────────
-st.set_page_config(page_title="Kenya Agricultural Forecast",
-                   page_icon="🌾",
-                   layout="wide")
+st.set_page_config(
+    page_title="Kenya Agricultural Forecast",
+    page_icon="🌾",
+    layout="wide"
+)
 
 st.title("🌾 Kenya Agricultural Production Forecast (NumPy)")
 st.markdown("""
-Forecast agricultural production in Kenya using FAOSTAT data (1960–2020).
-Model: Linear Regression implemented in NumPy.
+Historical Backtesting (1960–2020) + Future Forecast (2021–2025)  
+Model: Rolling Linear Regression implemented using NumPy
 """)
 
 # ──────────────────────────────────────────────
 # DATA UPLOAD
 # ──────────────────────────────────────────────
 uploaded_file = st.file_uploader(
-    "Upload FAOSTAT CSV (must include 'Year', 'Item', 'Element', 'Value')",
+    "Upload FAOSTAT CSV (must contain 'Year', 'Item', 'Element', 'Value')",
     type=["csv"]
 )
 
@@ -35,14 +37,14 @@ if uploaded_file is not None:
 
     df = pd.read_csv(uploaded_file)
 
-    # Filter production data
+    # Filter production
     df = df[df["Element"] == "Production"]
     df = df[df["Year"].between(1960, 2020)]
     df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
     df = df.dropna(subset=["Value"])
 
     # ──────────────────────────────────────────────
-    # SIDEBAR SETTINGS
+    # SIDEBAR
     # ──────────────────────────────────────────────
     st.sidebar.header("Forecast Settings")
 
@@ -58,13 +60,8 @@ if uploaded_file is not None:
         value=5
     )
 
-    st.sidebar.markdown("""
-- **Look-back Window:** Number of past years used to predict next year  
-- **Forecast Years:** How many years ahead to predict (max 5)
-""")
-
     # ──────────────────────────────────────────────
-    # PREPARE SERIES
+    # PREPARE DATA
     # ──────────────────────────────────────────────
     series_df = df[df["Item"] == crop_selected].sort_values("Year")
     values = series_df["Value"].values
@@ -91,50 +88,91 @@ if uploaded_file is not None:
         return np.mean(np.abs(y_true - y_pred))
 
     def mape(y_true, y_pred):
+        # Avoid division by zero
+        y_true = np.where(y_true == 0, 1e-8, y_true)
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
     def create_sequences(series, look_back):
         X, y = [], []
         for i in range(len(series) - look_back):
-            X.append(series[i:i+look_back])
-            y.append(series[i+look_back])
+            X.append(series[i:i + look_back])
+            y.append(series[i + look_back])
         return np.array(X), np.array(y)
 
     # ──────────────────────────────────────────────
-    # MODEL + FORECAST
+    # MODEL BACKTEST (1960–2020)
     # ──────────────────────────────────────────────
-    if len(values) > look_back + 5:
+    if len(values) > look_back:
 
         X, y = create_sequences(values, look_back)
 
-        # Train/Test split (last 5 actual years)
-        X_train, X_test = X[:-5], X[-5:]
-        y_train, y_test = y[:-5], y[-5:]
+        predictions = []
+        actuals = []
 
-        X_train_bias = np.c_[X_train, np.ones(len(X_train))]
-        X_test_bias = np.c_[X_test, np.ones(len(X_test))]
+        for i in range(len(X)):
+            X_train = X[:i + 1]
+            y_train = y[:i + 1]
 
-        # Linear regression
-        w = np.linalg.lstsq(X_train_bias, y_train, rcond=None)[0]
+            X_train_bias = np.c_[X_train, np.ones(len(X_train))]
 
-        # Test prediction
-        y_pred_test = X_test_bias @ w
+            w = np.linalg.lstsq(X_train_bias, y_train, rcond=None)[0]
 
-        rmse_val = rmse(y_test, y_pred_test)
-        mae_val = mae(y_test, y_pred_test)
-        mape_val = mape(y_test, y_pred_test)
+            X_test = np.append(X[i], 1)
+            y_pred = X_test @ w
+
+            predictions.append(y_pred)
+            actuals.append(y[i])
+
+        predictions = np.array(predictions)
+        actuals = np.array(actuals)
+
+        rmse_val = rmse(actuals, predictions)
+        mae_val = mae(actuals, predictions)
+        mape_val = mape(actuals, predictions)
+
+        # ──────────────────────────────────────────
+        # DISPLAY BACKTEST METRICS
+        # ──────────────────────────────────────────
+        st.subheader("📊 Model Performance (1960–2020 Backtest)")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("RMSE", f"{rmse_val:,.0f}")
+        c2.metric("MAE", f"{mae_val:,.0f}")
+        c3.metric("MAPE (%)", f"{mape_val:.2f}")
+
+        # Backtest chart
+        backtest_years = years[look_back:]
+        backtest_df = pd.DataFrame({
+            "Year": backtest_years,
+            "Actual": actuals,
+            "Predicted": predictions
+        })
+
+        backtest_chart = alt.Chart(backtest_df).transform_fold(
+            ["Actual", "Predicted"],
+            as_=["Type", "Value"]
+        ).mark_line().encode(
+            x=alt.X("Year:Q", axis=alt.Axis(format="d")),
+            y=alt.Y("Value:Q", axis=alt.Axis(format="~s")),
+            color="Type:N",
+            tooltip=["Year", "Type", "Value"]
+        ).interactive()
+
+        st.altair_chart(backtest_chart, use_container_width=True)
 
         # ──────────────────────────────────────────
         # FUTURE FORECAST (2021–2025)
         # ──────────────────────────────────────────
+        X_full_bias = np.c_[X, np.ones(len(X))]
+        w_final = np.linalg.lstsq(X_full_bias, y, rcond=None)[0]
+
         last_sequence = values[-look_back:].copy()
         future_predictions = []
 
         progress = st.progress(0)
 
         for i in range(forecast_horizon):
-            seq_with_bias = np.append(last_sequence, 1)
-            next_pred = seq_with_bias @ w
+            seq_bias = np.append(last_sequence, 1)
+            next_pred = seq_bias @ w_final
             future_predictions.append(next_pred)
 
             last_sequence = np.append(last_sequence[1:], next_pred)
@@ -156,41 +194,25 @@ if uploaded_file is not None:
 
         combined = pd.concat([history_df, forecast_df])
 
-        # ──────────────────────────────────────────
-        # METRICS
-        # ──────────────────────────────────────────
-        st.subheader("📊 Model Performance (Last 5 Known Years)")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("RMSE", f"{rmse_val:,.0f}")
-        c2.metric("MAE", f"{mae_val:,.0f}")
-        c3.metric("MAPE (%)", f"{mape_val:.2f}")
-
-        # ──────────────────────────────────────────
-        # FORECAST TABLE
-        # ──────────────────────────────────────────
-        st.subheader("📈 Forecast Results")
+        st.subheader("📈 Forecast (2021–2025)")
         st.dataframe(forecast_df)
 
-        # ──────────────────────────────────────────
-        # VISUALIZATION
-        # ──────────────────────────────────────────
-        chart = alt.Chart(combined).mark_line(point=True).encode(
+        forecast_chart = alt.Chart(combined).mark_line(point=True).encode(
             x=alt.X("Year:Q", axis=alt.Axis(format="d")),
             y=alt.Y("Value:Q", title="Production (tonnes)", axis=alt.Axis(format="~s")),
             color="Type:N",
             tooltip=["Year", "Value", "Type"]
         ).interactive()
 
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(forecast_chart, use_container_width=True)
 
-        # ──────────────────────────────────────────
-        # DOWNLOAD
-        # ──────────────────────────────────────────
         csv = combined.to_csv(index=False)
-        st.download_button("📥 Download Forecast CSV",
-                           csv,
-                           "kenya_agriculture_forecast.csv",
-                           "text/csv")
+        st.download_button(
+            "📥 Download Forecast CSV",
+            csv,
+            "kenya_agriculture_forecast.csv",
+            "text/csv"
+        )
 
     else:
         st.warning("Not enough data for selected look-back window.")
