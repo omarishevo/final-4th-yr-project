@@ -168,8 +168,8 @@ def load_and_preprocess(uploaded_file):
     df_wide = df_wide.reset_index()
     df_wide.columns.name = None
 
-    # Keep only 1961-2021
-    df_wide = df_wide[(df_wide["Year"] >= 1961) & (df_wide["Year"] <= 2021)]
+    # Keep only 1960-2020
+    df_wide = df_wide[(df_wide["Year"] >= 1960) & (df_wide["Year"] <= 2020)]
     df_wide = df_wide.reset_index(drop=True)
 
     # Forward/backward fill small gaps
@@ -241,7 +241,7 @@ def plot_trend(df, crop):
         hovertemplate="Year: %{x}<br>Production: %{y:,.0f} tonnes<extra></extra>",
     ))
     fig.update_layout(
-        title=f"{crop} — Historical Production Trend (1961–2021)",
+        title=f"{crop} — Historical Production Trend (1960–2020)",
         xaxis_title="Year", yaxis_title="Production (tonnes)",
         template="plotly_white", height=380,
         margin=dict(l=20, r=20, t=50, b=20),
@@ -423,7 +423,7 @@ with st.sidebar:
 st.markdown("""
 <div class="banner">
   <h1>🌾 Predicting Agricultural Seasonal Trends in Kenya</h1>
-  <p>Long Short-Term Memory (LSTM) Deep Learning Forecasting System &nbsp;|&nbsp; 1961 – 2021 Dataset</p>
+  <p>Long Short-Term Memory (LSTM) Deep Learning Forecasting System &nbsp;|&nbsp; 1960 – 2020 Dataset</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -891,7 +891,7 @@ with tab4:
         <div class="info-box">
         <b>📊 Dataset Summary</b><br><br>
         • Source: FAO FAOSTAT<br>
-        • Coverage: 1961–2021 (61 years)<br>
+        • Coverage: 1960–2020 (60 years)<br>
         • Crops: Maize, Tea, Coffee, Wheat, Oranges<br>
         • Element: Production (tonnes)<br>
         • Country: Kenya
