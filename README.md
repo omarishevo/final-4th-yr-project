@@ -151,7 +151,7 @@ Input
 - Performed **chronological 80/20 train-test split** to prevent data leakage
 
 ### Step 3 — Exploratory Data Analysis (EDA)
-- Time-series line plots per crop (1961–2021)
+- Time-series line plots per crop (1960–2020)
 - 3-year and 5-year moving averages to reveal long-term trends
 - Identified drought-year production dips: **1984, 1999–2000, 2016, 2017**
 - Crop correlation and comparative production analysis
