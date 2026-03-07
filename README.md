@@ -211,6 +211,8 @@ Input
 ### 🍊 Oranges
 - Consistent moderate growth: 5,000 → 145,445 tonnes
 
+-![Oranges Production Chart](https://raw.githubusercontent.com/omarishevo/final-4th-yr-project/main/Figure%202026-01-07%20132314%20(4).png)
+
 ### LSTM Conclusions
 - Successfully learned **cyclical patterns** tied to Kenya's bimodal rainfall (March–May, Oct–Dec)
 - Implicitly captured **drought years** — forecasts dipped in known climate shock periods
