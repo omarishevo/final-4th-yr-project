@@ -206,6 +206,8 @@ Input
 - High interannual variability; semi-arid dependent
 - Range: 84,200 – 511,994 tonnes
 
+-![Wheat Production Chart](https://raw.githubusercontent.com/omarishevo/final-4th-yr-project/main/Figure%202026-01-07%20132314%20(3).png)
+
 ### 🍊 Oranges
 - Consistent moderate growth: 5,000 → 145,445 tonnes
 
