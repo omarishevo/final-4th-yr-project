@@ -186,7 +186,7 @@ Input
 - Grew from ~940,000 tonnes (1961) to ~4,013,777 tonnes (peak)
 - **Three phases:** Steady growth (1961–1976) → High volatility (1977–2000) → Growth with volatility (2001–2021)
 - Major drought impacts: 1984 (2.5M → 1.4M tonnes), 2000, 2017
-  [Figure 2026-01-07 132314 (0).png](https://github.com/omarishevo/final-4th-yr-project/blob/main/Figure%202026-01-07%20132314%20(0).png?raw=true)
+  ![image alt] https://github.com/omarishevo/final-4th-yr-project/blob/b2972759b99e1c8df7d0046a18f6bb979b30f431/Figure%202026-01-07%20132314%20(0).png)
 
 ### ☕ Coffee
 - Peaked at **128,700 tonnes in 1987**
