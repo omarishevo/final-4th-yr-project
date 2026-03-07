@@ -200,6 +200,8 @@ Input
 - Rose from ~12,641 tonnes to **2,476,000 tonnes** at peak
 - Supported by KTDA smallholder schemes, export demand, and irrigation
 
+
+-![Tea Production Chart](https://raw.githubusercontent.com/omarishevo/final-4th-yr-project/main/Figure%202026-01-07%20132314%20(2).png
 ### 🌾 Wheat
 - High interannual variability; semi-arid dependent
 - Range: 84,200 – 511,994 tonnes
