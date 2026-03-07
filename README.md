@@ -193,6 +193,8 @@ Input
 - Declined ~73% to 35,000–40,000 tonnes by 2020
 - Structural decline linked to reduced plantation acreage and global price shifts
 
+-![Coffee Production Chart](https://raw.githubusercontent.com/omarishevo/final-4th-yr-project/main/Figure%202026-01-07%20132314%20(1).png)
+
 ### 🍵 Tea
 - Kenya's most **resilient agricultural commodity**
 - Rose from ~12,641 tonnes to **2,476,000 tonnes** at peak
